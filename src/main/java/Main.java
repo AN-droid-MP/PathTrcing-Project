@@ -20,14 +20,15 @@ public class Main {
         Scene scene = new Scene(camera);
 
 
-        scene.addShape(new Sphere(new Vector3(25, 7, -10), Color.CYAN, 7, 10, 10, new Vector3(0, 0, 0), Material.EMITTER));
+        //scene.addShape(new Sphere(new Vector3(25, 27, -10), Color.CYAN, 7, 10, 10, new Vector3(0, 0, 0), Material.GLASS));
+        scene.addShape(new Sphere(new Vector3(25, 7, -10), Color.CYAN, 7, 10, 10, new Vector3(0, 0, 0), Material.GLASS));
         scene.addShape(new Parallelepiped(new Vector3(15, 10, 0), Color.MAGENTA, 10, 20, 10, new Vector3(0, 0, 45), Material.SEMI_MATTE));
 
-        scene.addShape(new Parallelepiped(new Vector3(20, -1, 0), Color.WHITE, 40, 2, 40, new Vector3(0, 0, 0), Material.MATTE));
+        scene.addShape(new Parallelepiped(new Vector3(20, -1, 0), Color.WHITE, 40, 2, 40, new Vector3(0, 0, 0), Material.GLOSS));
         scene.addShape(new Parallelepiped(new Vector3(0, 30, 0), Color.ORANGE, 2, 60, 40, new Vector3(0, 0, 0), Material.MATTE));
         scene.addShape(new Parallelepiped(new Vector3(40, 30, 0), Color.BLUE, 2, 60, 40, new Vector3(0, 0, 0), Material.MATTE));
-        scene.addShape(new Parallelepiped(new Vector3(20, 30, 10), Color.WHITE, 40, 60, 2, new Vector3(0, 0, 0), Material.MATTE));
-        scene.addShape(new Parallelepiped(new Vector3(20, 60, 0), Color.WHITE, 40, 2, 40, new Vector3(0, 0, 0), Material.GLOSS));
+        scene.addShape(new Parallelepiped(new Vector3(20, 30, 10), Color.RED, 40, 60, 2, new Vector3(0, 0, 0), Material.SEMI_MATTE));
+        scene.addShape(new Parallelepiped(new Vector3(20, 60, 0), Color.WHITE, 40, 2, 40, new Vector3(0, 0, 0), Material.MATTE));
 
         Renderer renderer = new Renderer(scene);
 

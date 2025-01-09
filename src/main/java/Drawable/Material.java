@@ -4,7 +4,8 @@ public enum Material {
     MATTE(1),
     SEMI_MATTE(2),
     GLOSS(3),
-    EMITTER(4);
+    EMITTER(4),
+    GLASS(5);
 
     private final int id;
 

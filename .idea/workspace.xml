@@ -6,7 +6,7 @@
   <component name="ChangeListManager">
     <list default="true" id="db92f7cb-ed80-487f-b07b-80f04fa2f4dd" name="Changes" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/Drawable/ThreeDimObj/Parallelepiped.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/Drawable/ThreeDimObj/Parallelepiped.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/Drawable/Material.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/Drawable/Material.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/java/Main.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/Main.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/java/RayTracingKernel.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/RayTracingKernel.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/java/Renderer.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/Renderer.java" afterDir="false" />
@@ -110,7 +110,7 @@
       <workItem from="1735997017176" duration="4666000" />
       <workItem from="1736074108549" duration="13593000" />
       <workItem from="1736102759560" duration="106505000" />
-      <workItem from="1736395186971" duration="335000" />
+      <workItem from="1736395186971" duration="4240000" />
     </task>
     <servers />
   </component>

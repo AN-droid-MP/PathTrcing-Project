@@ -16,10 +16,11 @@ public class RayTracingKernel extends Kernel {
     private float[] shapes;          // Данные о фигурах
     private int[] pixels;           // Результирующие пиксели
     private int maxReflections;               // Поле зрения камеры
+    private int emitterIntensity;               // Поле зрения камеры
 
     public RayTracingKernel(int width, int height, float[] cameraPosition, float[] cameraDirection,
                             float[] cameraUp, float[] cameraRight, float fov,
-                            float[] lightPosition, float[] shapes, int[] pixels, int maxReflections) {
+                            float[] lightPosition, float[] shapes, int[] pixels, int maxReflections, int emitterIntensity) {
         this.width = width;
         this.height = height;
         this.cameraPosition = cameraPosition;
@@ -31,6 +32,7 @@ public class RayTracingKernel extends Kernel {
         this.shapes = shapes;
         this.pixels = pixels;
         this.maxReflections = maxReflections;
+        this.emitterIntensity = emitterIntensity;
     }
 
     @Override
@@ -47,8 +49,8 @@ public class RayTracingKernel extends Kernel {
 
         float[] rayDirection = normalize(add(add(multiply(cameraRight, px), multiply(cameraUp, py)), cameraDirection));
 
-        pixels[id] = traceRayWithSampling(cameraPosition, rayDirection, maxReflections, 20, 1);
-//        pixels[id] = traceRay(cameraPosition, rayDirection, maxReflections, 1);
+//        pixels[id] = traceRayWithSampling(cameraPosition, rayDirection, maxReflections, 100, 1);
+        pixels[id] = traceRay(cameraPosition, rayDirection, maxReflections, 1);
     }
 
     private int traceRayWithSampling(float[] origin, float[] direction, int remainingBounces, int samplesPerPixel, float currentIntensity) {
@@ -127,6 +129,28 @@ public class RayTracingKernel extends Kernel {
             return color;
         }
 
+        if (materialType == 5) { // Стекло
+            float ior = 1.5f; // Индекс преломления стекла
+            float eta = 1.0f / ior;
+
+            float fresnel = 1.0f - Math.abs(dot(multiply(direction, -1), hitNormal));
+            fresnel = fresnel * fresnel; // Усиление эффекта
+
+            float[] reflectedDirection = reflect(direction, hitNormal);
+            float[] refractedDirection = refract(direction, hitNormal, eta);
+
+            if (Math.random() < fresnel) {
+                // Вероятность отражения
+                direction = reflectedDirection;
+            } else {
+                // Вероятность преломления
+                hitPoint = add(hitPoint, multiply(refractedDirection, 1e-4f)); // Смещение
+                direction = refractedDirection;
+            }
+
+            return traceRay(hitPoint, direction, remainingBounces - 1, currentIntensity);
+        }
+
         float bias = 1e-4f;
         hitPoint = add(hitPoint, multiply(hitNormal, bias));
 
@@ -152,7 +176,7 @@ public class RayTracingKernel extends Kernel {
                 float[] emitterPosition = {shapes[i + 2], shapes[i + 3], shapes[i + 4]};
 
                 if (!isInShadow(hitPoint, emitterPosition)) {
-                    float emitterContribution = calculateLightFromEmitter(hitPoint, emitterPosition, currentIntensity, hitNormal);
+                    float emitterContribution = calculateLightFromEmitter(hitPoint, emitterPosition, currentIntensity*emitterIntensity, hitNormal);
                     lightingColor = blendColors(lightingColor, scaleColor(baseColor, emitterContribution), emitterContribution);
                 }
                 else {
@@ -288,7 +312,7 @@ public class RayTracingKernel extends Kernel {
             int materialType = (int) shapes[i + 3];
             if (materialType == 4) { // Эмиттер
                 float[] emitterPosition = {shapes[i + 1], shapes[i + 2], shapes[i + 3]};
-                float intensity = shapes[i + shapes.length - 1]; // Интенсивность эмиттера
+                float intensity = emitterIntensity; // Интенсивность эмиттера
                 totalIntensity += calculateLightFromEmitter(point, emitterPosition, intensity, normal);
             }
             i += 31; // Пропускаем параметры эмиттера
@@ -379,11 +403,38 @@ public class RayTracingKernel extends Kernel {
         return subtract(direction, multiply(normal, 2 * dotProduct));
     }
 
+    private float[] refract(float[] rd, float[] n, float eta) {
+        float dotNR = dot(n, rd);
+        float k = 1.0f - eta * eta * (1.0f - dotNR * dotNR);
+        if (k < 0.0f) {
+            return new float[]{0, 0, 0}; // Полное внутреннее отражение
+        }
+        return subtract(multiply(rd, eta), multiply(n, (eta * dotNR + (float) Math.sqrt(k))));
+    }
+
+    private float calculateFresnel(float[] incident, float[] normal, float ior1, float ior2) {
+        float cosi = Math.max(-1.0f, Math.min(1.0f, dot(incident, normal)));
+        float etai = ior1, etat = ior2;
+        if (cosi > 0) {
+            float temp = etai;
+            etai = etat;
+            etat = temp;
+        }
+        float sint = etai / etat * (float) Math.sqrt(Math.max(0.0f, 1 - cosi * cosi));
+        if (sint >= 1.0f) {
+            return 1.0f; // Полное внутреннее отражение
+        }
+        float cost = (float) Math.sqrt(Math.max(0.0f, 1 - sint * sint));
+        cosi = Math.abs(cosi);
+        float Rs = ((etat * cosi) - (etai * cost)) / ((etat * cosi) + (etai * cost));
+        float Rp = ((etai * cosi) - (etat * cost)) / ((etai * cosi) + (etat * cost));
+        return (Rs * Rs + Rp * Rp) / 2.0f;
+    }
 
     private float[] diffuseReflection(float[] normal) {
         float[] randomDir = randomUnitVector();
         if (dot(randomDir, normal) < 0) {
-            randomDir = multiply(randomDir, -1); // Убедимся, что луч в ту же сторону, что и нормаль
+            randomDir = multiply(randomDir, -1);
         }
         return normalize(add(normal, randomDir));
     }
