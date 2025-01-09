@@ -27,7 +27,7 @@ public class Renderer extends JPanel {
 
         float[] shapes = prepareShapes();
 
-        float[] lightPosition = {10, 20, -10}; // Положение источника света
+        float[] lightPosition = {20, 20, -30}; // Положение источника света
         float[] cameraPosition = camera.getPosition().toArray();
         float[] cameraUp = camera.getUp().toArray();
         float[] cameraRight = camera.getRight().toArray();
@@ -35,7 +35,7 @@ public class Renderer extends JPanel {
 
         RayTracingKernel kernel = new RayTracingKernel (
                 width, height, cameraPosition, cameraDirection,
-                cameraUp, cameraRight, (float) camera.getFov(), lightPosition, shapes, pixels, 50
+                cameraUp, cameraRight, (float) camera.getFov(), lightPosition, shapes, pixels, 10
         );
         kernel.execute(pixels.length);
 

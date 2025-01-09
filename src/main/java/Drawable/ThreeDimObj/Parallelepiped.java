@@ -32,9 +32,6 @@ public class Parallelepiped extends Shape {
                 new Vector3(position.x + width / 2, position.y + height / 2, position.z + depth / 2),
                 new Vector3(position.x - width / 2, position.y + height / 2, position.z + depth / 2)
         };
-        rotate(rotation.x, rotation.y, rotation.z);
-        System.out.println("Color: " + color.toString());
-        System.out.println("Corners: " + Arrays.toString(corners));
     }
 
 

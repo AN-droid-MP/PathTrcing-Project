@@ -4,6 +4,7 @@ import com.aparapi.Kernel;
 import java.util.Arrays;
 
 public class RayTracingKernel extends Kernel {
+    private float[] lightColor = {1.0f, 1.0f, 1.0f};
     private int width;
     private int height;
     private float[] cameraPosition;  // Положение камеры
@@ -46,12 +47,32 @@ public class RayTracingKernel extends Kernel {
 
         float[] rayDirection = normalize(add(add(multiply(cameraRight, px), multiply(cameraUp, py)), cameraDirection));
 
-        pixels[id] = traceRay(cameraPosition, rayDirection, maxReflections); // 5 отражений
+        pixels[id] = traceRayWithSampling(cameraPosition, rayDirection, maxReflections, 20, 1);
+//        pixels[id] = traceRay(cameraPosition, rayDirection, maxReflections, 1);
     }
 
-    private int traceRay(float[] origin, float[] direction, int remainingBounces) {
-        if (remainingBounces <= 0) {
-            return 0x000000; // Черный цвет при достижении предела отражений
+    private int traceRayWithSampling(float[] origin, float[] direction, int remainingBounces, int samplesPerPixel, float currentIntensity) {
+        int accumulatedColor = 0;
+        for (int i = 0; i < samplesPerPixel; i++) {
+            float[] jitteredDirection = applyJitter(direction); // Случайное смещение
+            int sampleColor = traceRay(origin, jitteredDirection, remainingBounces, currentIntensity);
+            accumulatedColor = blendColors(accumulatedColor, sampleColor, 1.0f / (i + 1));
+        }
+        return accumulatedColor;
+    }
+
+    private float[] applyJitter(float[] direction) {
+        float[] jitter = {randomInRange(-0.001f, 0.001f), randomInRange(-0.001f, 0.001f), randomInRange(-0.001f, 0.001f)};
+        return normalize(add(direction, jitter));
+    }
+
+    private float randomInRange(float min, float max) {
+        return min + (float) Math.random() * (max - min);
+    }
+
+    private int traceRay(float[] origin, float[] direction, int remainingBounces, float currentIntensity) {
+        if (remainingBounces <= 0 || currentIntensity < 0.01f) {
+            return 0x000000; // Черный цвет при достижении предела отражений или низкой интенсивности
         }
 
         float closestDistance = Float.MAX_VALUE;
@@ -59,9 +80,11 @@ public class RayTracingKernel extends Kernel {
         float[] hitNormal = null;
         float[] hitPoint = null;
         int baseColor = 0;
+        int materialType = 1;
 
         for (int i = 0; i < shapes.length; ) {
             int type = (int) shapes[i];
+            int surfaceType = (int) shapes[i + 1];
 
             float t = -1;
             float[] normal = new float[3];
@@ -77,6 +100,7 @@ public class RayTracingKernel extends Kernel {
                     hitNormal = normal;
                     hitPoint = add(origin, multiply(direction, t));
                     color = baseColor;
+                    materialType = surfaceType;
                 }
                 i += 32;
             } else if (type == 2) { // Сфера
@@ -87,6 +111,7 @@ public class RayTracingKernel extends Kernel {
                     hitNormal = calculateSphereNormal(origin, direction, t, shapes, i + 2);
                     hitPoint = add(origin, multiply(direction, t));
                     color = baseColor;
+                    materialType = surfaceType;
                 }
                 i += 11;
             } else {
@@ -98,18 +123,68 @@ public class RayTracingKernel extends Kernel {
             return 0x000000; // Черный цвет, если нет пересечения
         }
 
-        // Освещение для текущей точки
+        if(materialType == 4) {
+            return color;
+        }
+
         float bias = 1e-4f;
         hitPoint = add(hitPoint, multiply(hitNormal, bias));
+
+        // Освещение
         float intensity = calculateLightIntensity(hitPoint, hitNormal);
-        int lightingColor = applyLighting(color, intensity);
+        int diffuseColor = applyLighting(color, intensity); // Диффузный свет
 
-        // Reflections
-        float[] reflectedDirection = reflect(direction, hitNormal);
-        int reflectedColor = traceRay(hitPoint, reflectedDirection, remainingBounces - 1);
+        // Вектор направления света
+        float[] lightDirection = normalize(subtract(lightPosition, hitPoint));
 
-        // Blend base color and reflections
-        return blendColors(lightingColor, reflectedColor, 0.5f); // Половина от базового цвета и отражения
+        // Вектор взгляда (от точки к камере)
+        float[] viewDirection = normalize(subtract(cameraPosition, hitPoint));
+
+        // Рассчёт бликов
+        float[] specularColor = calculateSpecular(lightDirection, hitNormal, viewDirection, 50.0f, lightColor); // Shininess = 50.0f
+
+        // Смешиваем диффузное освещение с бликами
+        int lightingColor = blendColors(diffuseColor, convertColorToInt(specularColor), 0.5f);
+
+        for (int i = 0; i < shapes.length; ) {
+            int emitterType = (int) shapes[i+1];
+            if (emitterType == 4) { // Если это эмиттер
+                float[] emitterPosition = {shapes[i + 2], shapes[i + 3], shapes[i + 4]};
+
+                if (!isInShadow(hitPoint, emitterPosition)) {
+                    float emitterContribution = calculateLightFromEmitter(hitPoint, emitterPosition, currentIntensity, hitNormal);
+                    lightingColor = blendColors(lightingColor, scaleColor(baseColor, emitterContribution), emitterContribution);
+                }
+                else {
+                    // Если эмиттер перекрыт объектом, уменьшаем вклад освещения
+                    lightingColor = darkenColor(lightingColor, 0.5f);
+                }
+            }
+            i += 32; // Пропуск параметров эмиттера
+        }
+
+        // Проверка на наличие теней
+        if (isInShadow(hitPoint, hitNormal)) {
+            lightingColor = darkenColor(lightingColor, 0.5f); // Уменьшаем яркость в 2 раза
+        }
+
+        // Отражение
+        float reflectionIntensity = currentIntensity;
+        if (materialType == 1) { // Матовый
+            direction = diffuseReflection(hitNormal); // Новый случайный луч
+            reflectionIntensity *= 0.3f; // Матовые поверхности уменьшают интенсивность сильнее
+        } else if (materialType == 2) { // Полу-матовый
+            direction = blendDirections(reflect(direction, hitNormal), diffuseReflection(hitNormal), 0.8f); // Смешиваем отражение и рассеяние
+            reflectionIntensity *= 0.5f; // Полу-матовые поверхности уменьшают интенсивность меньше
+        } else if (materialType == 3) { // Глянец
+            direction = reflect(direction, hitNormal); // Чистое зеркальное отражение
+            reflectionIntensity *= 0.8f; // Глянцевые поверхности почти не уменьшают интенсивность
+        }
+
+        int reflectedColor = traceRay(hitPoint, direction, remainingBounces - 1, reflectionIntensity);
+
+        // Смешиваем базовый цвет и отражение
+        return blendColors(lightingColor, reflectedColor, reflectionIntensity);
     }
 
     private float intersectParallelepiped(float[] rayDirection, float[] origin, float[] center, float[] corners, float[] normal) {
@@ -155,22 +230,6 @@ public class RayTracingKernel extends Kernel {
         return tMin;
     }
 
-    private float[] calculateParallelepipedNormal(float[] hitPoint, float[] center, float[] corners) {
-        float[] normal = new float[3];
-        float bias = 1e-4f;
-
-        for (int i = 0; i < 3; i++) {
-            if (Math.abs(hitPoint[i] - (center[i] + corners[i * 2])) < bias) {
-                normal[i] = 1.0f;
-                break;
-            } else if (Math.abs(hitPoint[i] - (center[i] - corners[i * 2])) < bias) {
-                normal[i] = -1.0f;
-                break;
-            }
-        }
-        return normal;
-    }
-
     private float intersectSphere(float[] direction, float[] origin, float[] shapes, int index) {
         float[] center = {shapes[index], shapes[index + 1], shapes[index + 2]};
         float radius = shapes[index + 3];
@@ -208,9 +267,33 @@ public class RayTracingKernel extends Kernel {
         return (r << 16) | (g << 8) | b;
     }
 
-    private float calculateLightIntensity(float[] intersection, float[] normal) {
-        float[] lightDirection = normalize(subtract(lightPosition, intersection));
-        return Math.max(0, dot(normal, lightDirection));
+    private int scaleColor(int color, float intensity) {
+        int r = (int) Math.min(255, ((color >> 16) & 0xFF) * intensity);
+        int g = (int) Math.min(255, ((color >> 8) & 0xFF) * intensity);
+        int b = (int) Math.min(255, (color & 0xFF) * intensity);
+        return (r << 16) | (g << 8) | b;
+    }
+
+    private float calculateLightFromEmitter(float[] hitPoint, float[] emitterPosition, float intensity, float[] hitNormal) {
+        float[] lightDir = normalize(subtract(emitterPosition, hitPoint));
+        float distanceSquared = pow(length(subtract(emitterPosition, hitPoint)), 2);
+        float attenuation = intensity / (4 * (float) Math.PI * distanceSquared);
+        return attenuation * Math.max(0, dot(hitNormal, lightDir));
+    }
+
+    private float calculateLightIntensity(float[] point, float[] normal) {
+        float[] lightDir = normalize(subtract(lightPosition, point));
+        float totalIntensity = Math.max(0, dot(normal, lightDir));
+        for (int i = 0; i < shapes.length; ) {
+            int materialType = (int) shapes[i + 3];
+            if (materialType == 4) { // Эмиттер
+                float[] emitterPosition = {shapes[i + 1], shapes[i + 2], shapes[i + 3]};
+                float intensity = shapes[i + shapes.length - 1]; // Интенсивность эмиттера
+                totalIntensity += calculateLightFromEmitter(point, emitterPosition, intensity, normal);
+            }
+            i += 31; // Пропускаем параметры эмиттера
+        }
+        return totalIntensity; // Ограничиваем интенсивность в пределах [0, 1]
     }
 
     private int calculateColor(float[] shapes, int index) {
@@ -224,6 +307,41 @@ public class RayTracingKernel extends Kernel {
         int r = (int) ((baseColor >> 16 & 0xFF) * intensity);
         int g = (int) ((baseColor >> 8 & 0xFF) * intensity);
         int b = (int) ((baseColor & 0xFF) * intensity);
+        return (r << 16) | (g << 8) | b;
+    }
+
+    private boolean isInShadow(float[] point, float[] normal) {
+        float[] lightDir = normalize(subtract(lightPosition, point));
+        float bias = 1e-4f;
+        float[] shadowOrigin = add(point, multiply(normal, bias));
+
+        for (int i = 0; i < shapes.length; ) {
+            int type = (int) shapes[i];
+            float materialType = shapes[i + 1];
+            float t = -1;
+            if (type == 2) { // Сфера
+                t = intersectSphere(lightDir, shadowOrigin, shapes, i + 2);
+                if (t > 0 && materialType != 4) return true;
+                i += 11;
+            } else if (type == 1) { // Параллелепипед
+                float[] center = {shapes[i + 2], shapes[i + 3], shapes[i + 4]};
+                float[] corners = new float[24];
+                System.arraycopy(shapes, i + 5, corners, 0, 24);
+                float[] tempNormal = new float[3];
+                t = intersectParallelepiped(lightDir, shadowOrigin, center, corners, tempNormal);
+                if (t > 0 && materialType != 4) return true;
+                i += 32;
+            } else {
+                i += 11;
+            }
+        }
+        return false;
+    }
+
+    private int darkenColor(int color, float factor) {
+        int r = (int) ((color >> 16 & 0xFF) * factor);
+        int g = (int) ((color >> 8 & 0xFF) * factor);
+        int b = (int) ((color & 0xFF) * factor);
         return (r << 16) | (g << 8) | b;
     }
 
@@ -243,6 +361,10 @@ public class RayTracingKernel extends Kernel {
         return new float[]{a[0] * scalar, a[1] * scalar, a[2] * scalar};
     }
 
+    private float[] negate(float[] vector) {
+        return new float[]{-vector[0], -vector[1], -vector[2]};
+    }
+
     private float length(float[] v) {
         return (float) Math.sqrt(dot(v, v));
     }
@@ -255,5 +377,48 @@ public class RayTracingKernel extends Kernel {
     private float[] reflect(float[] direction, float[] normal) {
         float dotProduct = dot(direction, normal);
         return subtract(direction, multiply(normal, 2 * dotProduct));
+    }
+
+
+    private float[] diffuseReflection(float[] normal) {
+        float[] randomDir = randomUnitVector();
+        if (dot(randomDir, normal) < 0) {
+            randomDir = multiply(randomDir, -1); // Убедимся, что луч в ту же сторону, что и нормаль
+        }
+        return normalize(add(normal, randomDir));
+    }
+
+    private float[] blendDirections(float[] reflectedDirection, float[] diffuseDirection, float ratio) {
+        // Нормализуем направления
+        reflectedDirection = normalize(reflectedDirection);
+        diffuseDirection = normalize(diffuseDirection);
+
+        // Смешиваем направления в заданной пропорции
+        return normalize(new float[]{
+                reflectedDirection[0] * ratio + diffuseDirection[0] * (1 - ratio),
+                reflectedDirection[1] * ratio + diffuseDirection[1] * (1 - ratio),
+                reflectedDirection[2] * ratio + diffuseDirection[2] * (1 - ratio)
+        });
+    }
+
+    private float[] randomUnitVector() {
+        float z = (float) (Math.random() * 2 - 1);
+        float theta = (float) (Math.random() * 2 * Math.PI);
+        float r = (float) Math.sqrt(1 - z * z);
+        return new float[]{r * (float) Math.cos(theta), r * (float) Math.sin(theta), z};
+    }
+
+    float[] calculateSpecular(float[] lightDirection, float[] normal, float[] viewDirection, float shininess, float[] lightColor) {
+        float[] reflectionDirection = reflect(negate(lightDirection), normal);
+        float cosTheta = Math.max(0.0f, dot(viewDirection, reflectionDirection));
+        float specularIntensity = (float) Math.pow(cosTheta, shininess);
+        return multiply(lightColor, specularIntensity); // Блики теперь учитывают цвет света
+    }
+
+    private int convertColorToInt(float[] color) {
+        int r = (int) (color[0] * 255);
+        int g = (int) (color[1] * 255);
+        int b = (int) (color[2] * 255);
+        return (r << 16) | (g << 8) | b;
     }
 }

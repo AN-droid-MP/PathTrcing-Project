@@ -12,7 +12,7 @@ import java.awt.event.KeyEvent;
 public class Main {
     public static void main(String[] args) {
         Camera camera = new Camera(
-                new Vector3(10, 20, -30),
+                new Vector3(10, 30, -50),
                 Matrix4x4.identity(),
                 90
         );
@@ -20,14 +20,14 @@ public class Main {
         Scene scene = new Scene(camera);
 
 
-        scene.addShape(new Sphere(new Vector3(13, 4, -5), Color.CYAN, 4, 10, 10, new Vector3(0, 0, 0), Material.MATTE));
-        scene.addShape(new Parallelepiped(new Vector3(7, 2.5, 0), Color.MAGENTA, 5, 13d, 5, new Vector3(0, 0, 0), Material.MATTE));
+        scene.addShape(new Sphere(new Vector3(25, 7, -10), Color.CYAN, 7, 10, 10, new Vector3(0, 0, 0), Material.EMITTER));
+        scene.addShape(new Parallelepiped(new Vector3(15, 10, 0), Color.MAGENTA, 10, 20, 10, new Vector3(0, 0, 45), Material.SEMI_MATTE));
 
-        scene.addShape(new Parallelepiped(new Vector3(10, -1, 0), Color.WHITE, 20, 2, 20, new Vector3(0, 0, 0), Material.MATTE));
-        scene.addShape(new Parallelepiped(new Vector3(0, 20, 0), Color.WHITE, 2, 40, 20, new Vector3(0, 0, 0), Material.MATTE));
-        scene.addShape(new Parallelepiped(new Vector3(20, 20, 0), Color.WHITE, 2, 40, 20, new Vector3(0, 0, 0), Material.MATTE));
-        scene.addShape(new Parallelepiped(new Vector3(10, 20, 10), Color.WHITE, 20, 40, 2, new Vector3(0, 0, 0), Material.MATTE));
-        scene.addShape(new Parallelepiped(new Vector3(10, 40, 0), Color.WHITE, 20, 2, 20, new Vector3(0, 0, 0), Material.EMITTER));
+        scene.addShape(new Parallelepiped(new Vector3(20, -1, 0), Color.WHITE, 40, 2, 40, new Vector3(0, 0, 0), Material.MATTE));
+        scene.addShape(new Parallelepiped(new Vector3(0, 30, 0), Color.ORANGE, 2, 60, 40, new Vector3(0, 0, 0), Material.MATTE));
+        scene.addShape(new Parallelepiped(new Vector3(40, 30, 0), Color.BLUE, 2, 60, 40, new Vector3(0, 0, 0), Material.MATTE));
+        scene.addShape(new Parallelepiped(new Vector3(20, 30, 10), Color.WHITE, 40, 60, 2, new Vector3(0, 0, 0), Material.MATTE));
+        scene.addShape(new Parallelepiped(new Vector3(20, 60, 0), Color.WHITE, 40, 2, 40, new Vector3(0, 0, 0), Material.GLOSS));
 
         Renderer renderer = new Renderer(scene);
 
